@@ -1,21 +1,32 @@
 name: homebrew-bump
 
+# Bumps the source-tarball formula in FGRibreau/homebrew-tap to a released tag.
+#
+# A `release` event runs this file as it exists at the tagged commit, so a fix
+# merged after a release never reaches that release's run: `workflow_dispatch`
+# re-runs the bump for any existing tag from the current main.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to bump the formula to (e.g. v0.1.3)
+        required: true
+        type: string
 
 jobs:
   bump:
     name: bump tap formula
     runs-on: macos-latest
     environment: release
-    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft) }}
     steps:
-      - uses: dawidd6/action-homebrew-bump-formula@v3
+      # v3 calls Homebrew.safe_system, removed from recent Homebrew.
+      - uses: dawidd6/action-homebrew-bump-formula@v10
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           tap: FGRibreau/homebrew-tap
           formula: cargo-clean-targets
-          tag: ${{ github.event.release.tag_name }}
-          revision: ${{ github.event.release.target_commitish }}
+          tag: ${{ github.event.release.tag_name || inputs.tag }}
           force: false
