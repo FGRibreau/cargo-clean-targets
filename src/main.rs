@@ -72,11 +72,7 @@ fn parse_args() -> Result<Args, String> {
         "missing <PATH> argument".to_string()
     })?;
 
-    Ok(Args {
-        root,
-        dry,
-        verbose,
-    })
+    Ok(Args { root, dry, verbose })
 }
 
 fn is_cargo_target_dir(dir: &Path) -> bool {
@@ -145,10 +141,10 @@ fn looks_like_binary_artifact(path: &Path) -> bool {
         return false; // .cargo-lock, .fingerprint sentinels
     }
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    match ext {
-        "" | "exe" | "so" | "dylib" | "dll" | "a" | "lib" | "rlib" | "wasm" => true,
-        _ => false,
-    }
+    matches!(
+        ext,
+        "" | "exe" | "so" | "dylib" | "dll" | "a" | "lib" | "rlib" | "wasm"
+    )
 }
 
 #[derive(Default, Debug)]
@@ -248,7 +244,10 @@ fn clean_examples_dir(examples: &Path, args: &Args, stats: &mut Stats) -> io::Re
 
         if file_type.is_dir() {
             // examples/build, examples/deps, etc. — caches. Dirs are prominent.
-            if matches!(name.as_ref(), "build" | "deps" | "incremental" | ".fingerprint") {
+            if matches!(
+                name.as_ref(),
+                "build" | "deps" | "incremental" | ".fingerprint"
+            ) {
                 remove_path(&path, true, args, stats)?;
             }
         } else if file_type.is_file() {
@@ -288,8 +287,12 @@ fn clean_target_dir(target: &Path, args: &Args, stats: &mut Stats) -> io::Result
         if file_type.is_dir() {
             match name.as_ref() {
                 // Always-cache directories at the top of target/. Prominent.
-                "doc" | "package" | "tmp" | ".rustdoc_fingerprint"
-                | "sqlx-tmp" | "cargo-timings" => {
+                "doc"
+                | "package"
+                | "tmp"
+                | ".rustdoc_fingerprint"
+                | "sqlx-tmp"
+                | "cargo-timings" => {
                     remove_path(&path, true, args, stats)?;
                 }
                 _ => {
