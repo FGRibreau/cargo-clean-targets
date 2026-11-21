@@ -22,8 +22,8 @@ jobs:
     environment: release
     if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft) }}
     steps:
-      # v3 calls Homebrew.safe_system, removed from recent Homebrew.
-      - uses: dawidd6/action-homebrew-bump-formula@v10
+      # v3 and v10 break on recent Homebrew (safe_system removed, cooldown patch no longer applies).
+      - uses: dawidd6/action-homebrew-bump-formula@v11
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           tap: FGRibreau/homebrew-tap
