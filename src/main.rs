@@ -75,6 +75,39 @@ fn parse_args() -> Result<Args, String> {
     Ok(Args { root, dry, verbose })
 }
 
+/// Signature standard d'un `CACHEDIR.TAG` (bford.info/cachedir).
+const CACHEDIR_SIGNATURE: &str = "Signature: 8a477f597d28d172789f06886806bc55";
+
+/// Un `CACHEDIR.TAG` écrit par Cargo.
+/// Un autre outil peut signer le sien.
+fn has_cargo_cachedir_tag(dir: &Path) -> bool {
+    let Ok(file) = fs::File::open(dir.join("CACHEDIR.TAG")) else {
+        return false;
+    };
+    let mut head = String::new();
+    // Le tag de Cargo tient en 3 lignes : 512 octets suffisent.
+    if io::Read::read_to_string(&mut io::Read::take(file, 512), &mut head).is_err() {
+        return false;
+    }
+    head.starts_with(CACHEDIR_SIGNATURE) && head.contains("created by cargo")
+}
+
+/// Un profil Cargo (`debug/`) a `.fingerprint/` et `deps/`.
+fn is_cargo_profile_dir(dir: &Path) -> bool {
+    dir.join(".fingerprint").is_dir() && dir.join("deps").is_dir()
+}
+
+/// Un enfant direct est un profil.
+/// Pas l'enveloppe d'un triplet.
+/// `projets/x-target/debug` ressemblerait à `target/<triplet>/debug`.
+/// Un dossier parent serait pris pour une cible.
+fn has_cargo_profile(dir: &Path) -> bool {
+    let children = fs::read_dir(dir).into_iter().flatten().flatten();
+    let mut dirs = children.filter(|e| e.file_type().is_ok_and(|t| t.is_dir()));
+    dirs.any(|child| is_cargo_profile_dir(&child.path()))
+}
+
+/// Un dossier nommé `target/` : `CACHEDIR.TAG` ou `.rustc_info.json` suffit.
 fn is_cargo_target_dir(dir: &Path) -> bool {
     if !dir.is_dir() {
         return false;
@@ -84,6 +117,18 @@ fn is_cargo_target_dir(dir: &Path) -> bool {
     }
     // Strong signals that this is a Cargo target dir.
     dir.join("CACHEDIR.TAG").exists() || dir.join(".rustc_info.json").exists()
+}
+
+/// Un signal propre à Cargo, sans condition sur le nom.
+fn has_cargo_marker(dir: &Path) -> bool {
+    let has_info = dir.join(".rustc_info.json").is_file();
+    has_info || has_cargo_cachedir_tag(dir) || has_cargo_profile(dir)
+}
+
+/// Le chemin passé en argument, sous tout nom (`CARGO_TARGET_DIR`).
+/// Sans nom `target`, le signal doit être propre à Cargo.
+fn is_cargo_target_root(dir: &Path) -> bool {
+    is_cargo_target_dir(dir) || (dir.is_dir() && has_cargo_marker(dir))
 }
 
 fn dir_size(path: &Path) -> io::Result<u64> {
@@ -320,7 +365,9 @@ fn clean_target_dir(target: &Path, args: &Args, stats: &mut Stats) -> io::Result
     Ok(())
 }
 
-fn walk(root: &Path, args: &Args, stats: &mut Stats) -> io::Result<()> {
+/// `is_root` : le chemin de l'argument.
+/// Lui seul est reconnu sous un autre nom que `target`.
+fn walk(root: &Path, is_root: bool, args: &Args, stats: &mut Stats) -> io::Result<()> {
     let meta = match fs::symlink_metadata(root) {
         Ok(m) => m,
         Err(e) => {
@@ -332,7 +379,12 @@ fn walk(root: &Path, args: &Args, stats: &mut Stats) -> io::Result<()> {
         return Ok(());
     }
 
-    if is_cargo_target_dir(root) {
+    let is_target = if is_root {
+        is_cargo_target_root(root)
+    } else {
+        is_cargo_target_dir(root)
+    };
+    if is_target {
         clean_target_dir(root, args, stats)?;
         // Don't descend into a cleaned target/ — its subtrees are profile dirs.
         return Ok(());
@@ -351,7 +403,7 @@ fn walk(root: &Path, args: &Args, stats: &mut Stats) -> io::Result<()> {
             Err(_) => continue,
         };
         if ft.is_dir() {
-            walk(&entry.path(), args, stats)?;
+            walk(&entry.path(), false, args, stats)?;
         }
     }
     Ok(())
@@ -363,7 +415,7 @@ fn run() -> Result<(Args, Stats), String> {
         return Err(format!("path does not exist: {}", args.root.display()));
     }
     let mut stats = Stats::default();
-    walk(&args.root, &args, &mut stats).map_err(|e| format!("walk failed: {e}"))?;
+    walk(&args.root, true, &args, &mut stats).map_err(|e| format!("walk failed: {e}"))?;
     Ok((args, stats))
 }
 

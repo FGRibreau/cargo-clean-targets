@@ -239,6 +239,8 @@ Thanks for using cargo-clean-targets!
 
 A directory is treated as a Cargo target only if it contains `CACHEDIR.TAG` or `.rustc_info.json`. A folder named `target/` that isn't actually one (e.g. some unrelated project's data dir) is left alone.
 
+The path you pass can also be a Cargo target dir under any name (a `CARGO_TARGET_DIR` such as `/tmp/build-target`). It is recognised when it holds a `CACHEDIR.TAG` written by Cargo (signature plus the "created by cargo" line), a `.rustc_info.json`, or a profile dir (a child with both `.fingerprint/` and `deps/`). Only the path itself gets this treatment: below it, only folders named `target/` are considered, and a parent of such a dir is never taken for one.
+
 Inside a target-triple wrapper (`target/<triple>/`), the same profile-cleaning logic applies — `target/<triple>/release/myapp` is kept, the surrounding `deps/`, `build/`, `incremental/`, `.fingerprint/` are removed.
 
 ---
